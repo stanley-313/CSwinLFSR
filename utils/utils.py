@@ -89,46 +89,41 @@ class TestSetDataLoader(Dataset):
     def __len__(self):
         return self.item_num
 
-def cal_metrics(args, label, out,):
-    if len(label.size()) == 4:
-        label = rearrange(label, 'b c (a1 h) (a2 w) -> b c a1 h a2 w', a1=args.angRes_in, a2=args.angRes_in)
-        out = rearrange(out, 'b c (a1 h) (a2 w) -> b c a1 h a2 w', a1=args.angRes_in, a2=args.angRes_in)
+def cal_psnr(img1, img2):
+    img1_np = img1.data.cpu().numpy()
+    img2_np = img2.data.cpu().numpy()
 
-    if len(label.size()) == 5:
-        label = label.permute((0, 1, 3, 2, 4)).unsqueeze(0)
-        out = out.permute((0, 1, 3, 2, 4)).unsqueeze(0)
+    return metrics.peak_signal_noise_ratio(img1_np, img2_np)
 
-    B, C, U, h, V, w = label.size()
-    label_y = label[:, 0, :, :, :, :].data.cpu()
-    out_y = out[:, 0, :, :, :, :].data.cpu()
+def cal_ssim(img1, img2):
+    img1_np = img1.data.cpu().numpy()
+    img2_np = img2.data.cpu().numpy()
 
-    PSNR = np.zeros(shape=(B, U, V), dtype='float32')
-    SSIM = np.zeros(shape=(B, U, V), dtype='float32')
-    for b in range(B):
-        for u in range(U):
-            for v in range(V):
-                PSNR[b, u, v] = metrics.peak_signal_noise_ratio(label_y[b, u, :, v, :].numpy(), out_y[b, u, :, v, :].numpy())
-                if args.task == 'RE':
-                    SSIM[b, u, v] = metrics.structural_similarity(label_y[b, u, :, v, :].numpy(),
-                                                                  out_y[b, u, :, v, :].numpy(),
-                                                                  gaussian_weights=True,
-                                                                  sigma=1.5, use_sample_covariance=False)
-                else:
-                    SSIM[b, u, v] = metrics.structural_similarity(label_y[b, u, :, v, :].numpy(),
-                                                                  out_y[b, u, :, v, :].numpy(),
-                                                                  gaussian_weights=True, )
-                pass
+    return metrics.structural_similarity(img1_np, img2_np, gaussian_weights=True)
 
-    if args.task=='RE':
-        for u in range(0, args.angRes_out, (args.angRes_out - 1) // (args.angRes_in - 1)):
-            for v in range(0, args.angRes_out, (args.angRes_out - 1) // (args.angRes_in - 1)):
-                PSNR[:, u, v] = 0
-                SSIM[:, u, v] = 0
+def cal_metrics(img1, img2, angRes):
+    if len(img1.size())==2:
+        [H, W] = img1.size()
+        img1 = img1.view(angRes, H // angRes, angRes, W // angRes).permute(0,2,1,3)
+    if len(img2.size())==2:
+        [H, W] = img2.size()
+        img2 = img2.view(angRes, H // angRes, angRes, W // angRes).permute(0,2,1,3)
 
-    PSNR_mean = PSNR.sum() / np.sum(PSNR > 0)
-    SSIM_mean = SSIM.sum() / np.sum(SSIM > 0)
+    [U, V, h, w] = img1.size()
+    PSNR = np.zeros(shape=(U, V), dtype='float32')
+    SSIM = np.zeros(shape=(U, V), dtype='float32')
 
-    return PSNR_mean, SSIM_mean
+    for u in range(U):
+        for v in range(V):
+            PSNR[u, v] = cal_psnr(img1[u, v, :, :], img2[u, v, :, :])
+            SSIM[u, v] = cal_ssim(img1[u, v, :, :], img2[u, v, :, :])
+            pass
+        pass
+
+    psnr_mean = PSNR.sum() / np.sum(PSNR > 0)
+    ssim_mean = SSIM.sum() / np.sum(SSIM > 0)
+
+    return psnr_mean, ssim_mean
 
 
 def ImageExtend(Im, bdr):

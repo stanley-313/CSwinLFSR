@@ -6,7 +6,7 @@ close all;
 factor = 4;
 
 %%
-sourceDataPath = '../BasicLFSR/NTIRE_Test/mat/';
+sourceDataPath = '../BasicLFSR/datasets/';
 sourceDatasets = dir(sourceDataPath);
 sourceDatasets(1:2) = [];
 datasetsNum = length(sourceDatasets);
@@ -15,7 +15,7 @@ resultsFolder = './Results/';
 
 for DatasetIndex = 1 : datasetsNum
     DatasetName = sourceDatasets(DatasetIndex).name;
-    gtFolder = [sourceDataPath, sourceDatasets(DatasetIndex).name];
+    gtFolder = [sourceDataPath, sourceDatasets(DatasetIndex).name, '/test/'];
     scenefiles = dir(gtFolder);
     scenefiles(1:2) = [];
     sceneNum = length(scenefiles);
@@ -30,18 +30,18 @@ for DatasetIndex = 1 : datasetsNum
         data = load([resultsFolder, sceneName, '.mat']);
         LFsr_y = data.LF;
         [angRes, ~, H, W] = size(LFsr_y);  
+        
         data = load([gtFolder, '/', sceneName, '.mat']);
         LFgt_rgb = data.LF;
-    
+        LFgt_rgb = LFgt_rgb(:, :, 1:H, 1:W, 1:3);
         LFsr = zeros(angRes, angRes, H, W, 3);
         
         for u = 1 : angRes
             for v = 1 : angRes    
-                imgLR_rgb = squeeze(LFgt_rgb(u, v, :, :, :));
-                imgLR_ycbcr = rgb2ycbcr(imgLR_rgb);
-                imgSR_ycbcr = imresize(imgLR_ycbcr, factor);
-                imgSR_ycbcr(:,:,1) = LFsr_y(u, v, :, :);
-                imgSR_rgb = ycbcr2rgb(imgSR_ycbcr);
+                imgHR_rgb = squeeze(LFgt_rgb(u, v, :, :, :));
+                imgHR_ycbcr = rgb2ycbcr(imgHR_rgb);
+                imgHR_ycbcr(:, :, 1) = LFsr_y(u, v, :, :);
+                imgSR_rgb = ycbcr2rgb(imgHR_ycbcr);
                 LFsr(u, v, :, :, :) = imgSR_rgb;                
               
                 SavePath = ['./SRimages/', DatasetName, '/', sceneName, '/'];
